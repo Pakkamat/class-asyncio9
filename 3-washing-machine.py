@@ -24,11 +24,23 @@ class WashingMachine:
         self.SERIAL = serial
 
 async def timefillwater(w, time_fill = 100):
-    print(f"{time.ctime()} - [{w.SERIAL}-{w.MACHINE_STATUS}] - Another {time_fill} seconds Timeout")
+    print(f"{time.ctime()} - [{w.SERIAL}-{w.MACHINE_STATUS}] - Another 10 seconds Timeout")
+    await asyncio.sleep(time_fill)
+
+async def requi_temp(w, time_fill = 100):
+    print(f"{time.ctime()} - [{w.SERIAL}-{w.MACHINE_STATUS}] - Another 10 seconds to Timeout")
+    await asyncio.sleep(time_fill)
+
+async def balance(w, time_fill = 100):
+    print(f"{time.ctime()} - [{w.SERIAL}-{w.MACHINE_STATUS}] - Another 10 seconds to continue")
+    await asyncio.sleep(time_fill)
+
+async def motor(w, time_fill = 100):
+    print(f"{time.ctime()} - [{w.SERIAL}-{w.MACHINE_STATUS}] - Another 10 seconds to continue")
     await asyncio.sleep(time_fill)
 
 async def publish_message(w, client, app, action, name, value):
-    print(f"{time.ctime()} - [{w.SERIAL}] {name}:{value}")
+    print(f"{time.ctime()} - [{w.SERIAL}] {name} : {value}")
     await asyncio.sleep(2)
     payload = {
                 "action"    : "get",
@@ -53,14 +65,13 @@ async def CoroWashingMachine(w, client):
             print(f"{time.ctime()} - [{w.SERIAL}-{w.MACHINE_STATUS}] Waiting to ready... {wait_next} seconds.")
             continue
         if w.MACHINE_STATUS == 'READY':
+            w.Operation = 'CLOSE'
             print(f"{time.ctime()} - [{w.SERIAL}-{w.MACHINE_STATUS}]")
-
-
             await publish_message(w, client, "app", "get", "STATUS", "READY")
             # door close
             if w.Operation == 'CLOSE':
-                await publish_message(w, client, "app", "get", "Operation", "DOORCLOSE")
-                print(f"{time.ctime()} - [{w.SERIAL}-{w.MACHINE_STATUS}]")
+                #await publish_message(w, client, "app", "get", "Operation", "DOORCLOSE")
+                print(f"{time.ctime()} - [{w.SERIAL}-{w.MACHINE_STATUS}] - User initiates Door closed")
                 # fill water untill full level detected within 10 seconds if not full then timeout 
                 w.MACHINE_STATUS = "FILLWATER"
 
@@ -71,28 +82,96 @@ async def CoroWashingMachine(w, client):
                         await w.Task
 
                 except TimeoutError:
-                    print(f"{time.ctime()} - [{w.SERIAL}-{w.MACHINE_STATUS}] - TIME OUT")
+                    print(f"{time.ctime()} - [{w.SERIAL}-{w.MACHINE_STATUS}] - TIMEOUT")
                     w.MACHINE_STATUS = 'FALUT'
                     continue
 
                 except asyncio.CancelledError:
-                    print(f"{time.ctime()} - [{w.SERIAL}-{w.MACHINE_STATUS}] - Cencel")
+                    print(f"{time.ctime()} - [{w.SERIAL}-{w.MACHINE_STATUS}] - Full level detected")
+                    w.MACHINE_STATUS = 'HEATWATER'
+                    await asyncio.sleep(1)
 
-        #if w.MACHINE_STATUS == 'HEATWATER':
+                if w.MACHINE_STATUS == 'HEATWATER':
+                    #await publish_message(w, client, "app", "get", "Operation", "WATERFULLLEVEL")
+                    #print(f"{time.ctime()} - [{w.SERIAL}-{w.MACHINE_STATUS}]")
+                    # fill water untill full level detected within 10 seconds if not full then timeout 
+                    try:
+                        async with asyncio.timeout(10):
+                            await publish_message(w, client, "app", "get", "STATUS", "HEATWATER")
+                            w.Task = asyncio.create_task(requi_temp(w))
+                            await w.Task
 
+                    except TimeoutError:
+                        print(f"{time.ctime()} - [{w.SERIAL}-{w.MACHINE_STATUS}] - TIMEOUT")
+                        w.MACHINE_STATUS = 'FALUT'
 
-            # wash 10 seconds, if out of balance detected then fault
+                    except asyncio.CancelledError:
+                        print(f"{time.ctime()} - [{w.SERIAL}-{w.MACHINE_STATUS}] - Required Temperature reached")
+                        w.MACHINE_STATUS = 'WASH'
+                        await asyncio.sleep(1)
 
-            # rinse 10 seconds, if motor failure detect then fault
+                if w.MACHINE_STATUS == 'WASH':
+                    #await publish_message(w, client, "app", "get", "Operation", "TEMPERATUREREACHED")
+                    #print(f"{time.ctime()} - [{w.SERIAL}-{w.MACHINE_STATUS}]")
+                    # wash 10 seconds, if out of balance detected then fault
+                    try:
+                        async with asyncio.timeout(10):
+                            await publish_message(w, client, "app", "get", "STATUS", "WASH")
+                            w.Task = asyncio.create_task(balance(w))
+                            await w.Task
 
+                    except TimeoutError:
+                        print(f"{time.ctime()} - [{w.SERIAL}-{w.MACHINE_STATUS}] - Function Completed")
+                        w.MACHINE_STATUS = 'RINSE'
+                        await asyncio.sleep(1)
+
+                    except asyncio.CancelledError:
+                        print(f"{time.ctime()} - [{w.SERIAL}-{w.MACHINE_STATUS}] - Out of balance")
+                        w.MACHINE_STATUS = 'FALUT'
+
+                if w.MACHINE_STATUS == 'RINSE':
+                    #await publish_message(w, client, "app", "get", "Operation", "OUTOFBALANCE")
+                    #print(f"{time.ctime()} - [{w.SERIAL}-{w.MACHINE_STATUS}]")
+                    # rinse 10 seconds, if motor failure detect then fault
+                    try:
+                        async with asyncio.timeout(10):
+                            await publish_message(w, client, "app", "get", "STATUS", "RINSE")
+                            w.Task = asyncio.create_task(motor(w))
+                            await w.Task
+
+                    except TimeoutError:
+                        print(f"{time.ctime()} - [{w.SERIAL}-{w.MACHINE_STATUS}] - Function Completed")
+                        w.MACHINE_STATUS = 'SPIN'
+                        await asyncio.sleep(1)
+
+                    except asyncio.CancelledError:
+                        print(f"{time.ctime()} - [{w.SERIAL}-{w.MACHINE_STATUS}] - Motor failure")
+                        w.MACHINE_STATUS = 'FALUT'
+                        
             # spin 10 seconds, if motor failure detect then fault
+            if w.MACHINE_STATUS == 'SPIN':
+                    #await publish_message(w, client, "app", "get", "Operation", "OUTOFBALANCE")
+                    #print(f"{time.ctime()} - [{w.SERIAL}-{w.MACHINE_STATUS}]")
+                    # rinse 10 seconds, if motor failure detect then fault
+                    try:
+                        async with asyncio.timeout(10):
+                            await publish_message(w, client, "app", "get", "STATUS", "SPIN")
+                            w.Task = asyncio.create_task(motor(w))
+                            await w.Task
 
+                    except TimeoutError:
+                        print(f"{time.ctime()} - [{w.SERIAL}-{w.MACHINE_STATUS}] - Function Completed")
+                        w.MACHINE_STATUS = 'OFF'
+                        await asyncio.sleep(1)
+
+                    except asyncio.CancelledError:
+                        print(f"{time.ctime()} - [{w.SERIAL}-{w.MACHINE_STATUS}] - Motor failure")
+                        w.MACHINE_STATUS = 'FALUT'
+                        
             # ready state set 
 
             # When washing is in FAULT state, wait until get FAULTCLEARED
 
-        await publish_message(w, client, "app", "get", "STATUS", w.MACHINE_STATUS)
-        continue
             
 
 async def listen(w, client):
@@ -102,17 +181,29 @@ async def listen(w, client):
             m_decode = json.loads(message.payload)
             if message.topic.matches(f"v1cdti/app/set/{student_id}/model-01/{w.SERIAL}"):
                 # set washing machine status
-                print(f"{time.ctime()} - MQTT - [{m_decode['serial']}]:{m_decode['name']} => {m_decode['value']}")
+                print(f"{time.ctime()} - MQTT - [{m_decode['serial']}] : {m_decode['name']} => {m_decode['value']}")
                 if (m_decode['name']=="STATUS" and m_decode['value']=="READY"):
                     w.MACHINE_STATUS = 'READY'
                 elif (m_decode['name']=="Operation" and m_decode['value']=="WATERFULLLEVEL"):
                     w.Operation = 'WATERFULLLEVEL'
                     if w.Task:
                         w.Task.cancel()
-                        w.MACHINE_STATUS = 'HEATWATER'
+                        asyncio.sleep
+                elif (m_decode['name']=="Operation" and m_decode['value']=="TEMPERATUREREACHED"):
+                    w.Operation = 'TEMPERATUREREACHED'
+                    if w.Task:
+                        w.Task.cancel()
+                elif (m_decode['name']=="Operation" and m_decode['value']=="OUTOFBALANCE"):
+                    w.Operation = 'OUTOFBALANCE'
+                    if w.Task:
+                        w.Task.cancel()
+                elif (m_decode['name']=="Operation" and m_decode['value']=="MOTORFAILURE"):
+                    w.Operation = 'MOTORFAILURE'
+                    if w.Task:
+                        w.Task.cancel()
                 if (m_decode['name']=="Operation" and m_decode['value']=="FAULT_CLEAR"):
                      w.MACHINE_STATUS = 'OFF'
-                     
+
 async def main():
     w = WashingMachine(serial='SN-001')
     async with aiomqtt.Client("broker.emqx.io") as client:
