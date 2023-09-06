@@ -61,9 +61,11 @@ async def CoroWashingMachine(w, client):
         if w.MACHINE_STATUS == 'OFF':
             print(f"{time.ctime()} - [{w.SERIAL}-{w.MACHINE_STATUS}] Waiting to start... {wait_next} seconds.")
             continue
+        # When washing is in FAULT state, wait until get FAULTCLEARED
         if w.MACHINE_STATUS == 'FALUT':
             print(f"{time.ctime()} - [{w.SERIAL}-{w.MACHINE_STATUS}] Waiting to ready... {wait_next} seconds.")
             continue
+        # ready state set 
         if w.MACHINE_STATUS == 'READY':
             w.Operation = 'CLOSE'
             print(f"{time.ctime()} - [{w.SERIAL}-{w.MACHINE_STATUS}]")
@@ -167,12 +169,6 @@ async def CoroWashingMachine(w, client):
                     except asyncio.CancelledError:
                         print(f"{time.ctime()} - [{w.SERIAL}-{w.MACHINE_STATUS}] - Motor failure")
                         w.MACHINE_STATUS = 'FALUT'
-                        
-            # ready state set 
-
-            # When washing is in FAULT state, wait until get FAULTCLEARED
-
-            
 
 async def listen(w, client):
     async with client.messages() as messages:
