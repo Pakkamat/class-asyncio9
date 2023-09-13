@@ -174,50 +174,53 @@ async def CoroWashingMachine(w:WashingMachine, client):
 
 async def listen(w:WashingMachine, client):
     async with client.messages() as messages:
-        await client.subscribe(f"v1cdti/app/set/{student_id}/model-01/{w.SERIAL}")
+        await client.subscribe(f"v1cdti/hw/set/{student_id}/model-01/{w.SERIAL}")
         async for message in messages:
             m_decode = json.loads(message.payload)
-            if message.topic.matches(f"v1cdti/app/set/{student_id}/model-01/{w.SERIAL}"):
+            if message.topic.matches(f"v1cdti/hw/set/{student_id}/model-01/{w.SERIAL}"):
                 # set washing machine status
                 print(f"{time.ctime()} - MQTT - [{m_decode['serial']}] : {m_decode['name']} => {m_decode['value']}")
-                if (m_decode['name']=="STATUS" and m_decode['value']=="READY"):
-                    # Sleep for 1 second and set the event.
-                    w.event.set()
-                    w.MACHINE_STATUS = 'READY'
-                elif (m_decode['name']=="Operation" and m_decode['value']=="WATERFULLLEVEL"):
-                    if w.MACHINE_STATUS == "FILLWATER":
-                        w.Operation = 'WATERFULLLEVEL'
-                        if w.Task:
-                            w.Task.cancel()
-                    else :
-                        print(f"{time.ctime()} - [{w.SERIAL}-{w.MACHINE_STATUS}] - Enter error")
-                elif (m_decode['name']=="Operation" and m_decode['value']=="TEMPERATUREREACHED"):
-                    if w.MACHINE_STATUS == "HEATWATER":
-                        w.Operation = 'TEMPERATUREREACHED'
-                        if w.Task:
-                            w.Task.cancel()
-                    else :
-                        print(f"{time.ctime()} - [{w.SERIAL}-{w.MACHINE_STATUS}] - Enter error")
-                elif (m_decode['name']=="Operation" and m_decode['value']=="OUTOFBALANCE"):
-                    if w.MACHINE_STATUS == "WASH":
-                        w.Operation = 'OUTOFBALANCE'
-                        if w.Task:
-                            w.Task.cancel()
-                    else :
-                        print(f"{time.ctime()} - [{w.SERIAL}-{w.MACHINE_STATUS}] - Enter error")
-                elif (m_decode['name']=="Operation" and m_decode['value']=="MOTORFAILURE"):
-                    if w.MACHINE_STATUS == "RINSE" or w.MACHINE_STATUS == "SPIN":
-                        w.Operation = 'MOTORFAILURE'
-                        if w.Task:
-                            w.Task.cancel()
-                    else :
-                        print(f"{time.ctime()} - [{w.SERIAL}-{w.MACHINE_STATUS}] - Enter error")
-                if (m_decode['name']=="Operation" and m_decode['value']=="FAULT_CLEAR"):
-                     w.event.set()
-                     w.MACHINE_STATUS = 'OFF'
+                if m_decode['serial'] == w.SERIAL:
+                    if (m_decode['name']=="STATUS" and m_decode['value']=="READY"):
+                        # Sleep for 1 second and set the event.
+                        w.event.set()
+                        w.MACHINE_STATUS = 'READY'
+                    elif (m_decode['name']=="Operation" and m_decode['value']=="WATERFULLLEVEL"):
+                        if w.MACHINE_STATUS == "FILLWATER":
+                            w.Operation = 'WATERFULLLEVEL'
+                            if w.Task:
+                                w.Task.cancel()
+                        else :
+                            print(f"{time.ctime()} - [{w.SERIAL}-{w.MACHINE_STATUS}] - Enter error")
+                    elif (m_decode['name']=="Operation" and m_decode['value']=="TEMPERATUREREACHED"):
+                        if w.MACHINE_STATUS == "HEATWATER":
+                            w.Operation = 'TEMPERATUREREACHED'
+                            if w.Task:
+                                w.Task.cancel()
+                        else :
+                            print(f"{time.ctime()} - [{w.SERIAL}-{w.MACHINE_STATUS}] - Enter error")
+                    elif (m_decode['name']=="Operation" and m_decode['value']=="OUTOFBALANCE"):
+                        if w.MACHINE_STATUS == "WASH":
+                            w.Operation = 'OUTOFBALANCE'
+                            if w.Task:
+                                w.Task.cancel()
+                        else :
+                            print(f"{time.ctime()} - [{w.SERIAL}-{w.MACHINE_STATUS}] - Enter error")
+                    elif (m_decode['name']=="Operation" and m_decode['value']=="MOTORFAILURE"):
+                        if w.MACHINE_STATUS == "RINSE" or w.MACHINE_STATUS == "SPIN":
+                            w.Operation = 'MOTORFAILURE'
+                            if w.Task:
+                                w.Task.cancel()
+                        else :
+                            print(f"{time.ctime()} - [{w.SERIAL}-{w.MACHINE_STATUS}] - Enter error")
+                    if (m_decode['name']=="Operation" and m_decode['value']=="FAULT_CLEAR"):
+                        w.event.set()
+                        w.MACHINE_STATUS = 'OFF'
+                else:
+                    print(f"{time.ctime()} - [{w.SERIAL}-{w.MACHINE_STATUS}] - Serial error")
 
 async def main():
-    n = 2
+    n = 10
     W = [WashingMachine(serial=f'SN-00{i+1}') for i in range(n)]
     async with aiomqtt.Client("broker.emqx.io") as client:
         listenTask = []
