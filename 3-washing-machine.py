@@ -22,11 +22,7 @@ class WashingMachine:
         self.MACHINE_STATUS = 'OFF'
         self.Operation = 'CLOSE'
         self.SERIAL = serial
-
-async def waiter(w, event):
-    print(f"{time.ctime()} - [{w.SERIAL}-{w.MACHINE_STATUS}] Waiting to start... ")
-    await event.wait()
-    #print('... got it!')
+        self.event = asyncio.Event()
 
 async def timefillwater(w, time_fill = 100):
     print(f"{time.ctime()} - [{w.SERIAL}-{w.MACHINE_STATUS}] - Another 10 seconds Timeout")
@@ -58,23 +54,22 @@ async def publish_message(w, client, app, action, name, value):
     await client.publish(f"v1cdti/{app}/{action}/{student_id}/model-01/{w.SERIAL}"
                         , payload=json.dumps(payload))
 
-async def CoroWashingMachine(w, client):
+async def CoroWashingMachine(w:WashingMachine, client):
     while True:
         #wait_next = round(10*random.random(),2)
         #await asyncio.sleep(wait_next)
-        # Create an Event object.
-        w.event = asyncio.Event()
 
-        # Spawn a Task to wait until 'event' is set.
-        waiter_task = asyncio.create_task(waiter(w, w.event))
-
-        # Wait until the waiter task is finished.
-        await waiter_task
         if w.MACHINE_STATUS == 'OFF':
+            print(f"{time.ctime()} - [{w.SERIAL}-{w.MACHINE_STATUS}] Waiting to start... ")
+            await w.event.wait()
+            w.event.clear()
             #print(f"{time.ctime()} - [{w.SERIAL}-{w.MACHINE_STATUS}] Waiting to start... ")
             continue
         # When washing is in FAULT state, wait until get FAULTCLEARED
         if w.MACHINE_STATUS == 'FALUT':
+            print(f"{time.ctime()} - [{w.SERIAL}-{w.MACHINE_STATUS}] Waiting to Clear falut... ")
+            await w.event.wait()
+            w.event.clear()
             #print(f"{time.ctime()} - [{w.SERIAL}-{w.MACHINE_STATUS}] Waiting to ready...")
             continue
         # ready state set 
@@ -177,7 +172,7 @@ async def CoroWashingMachine(w, client):
                         print(f"{time.ctime()} - [{w.SERIAL}-{w.MACHINE_STATUS}] - Motor failure")
                         w.MACHINE_STATUS = 'FALUT'
 
-async def listen(w, client):
+async def listen(w:WashingMachine, client):
     async with client.messages() as messages:
         await client.subscribe(f"v1cdti/app/set/{student_id}/model-01/{w.SERIAL}")
         async for message in messages:
@@ -222,9 +217,15 @@ async def listen(w, client):
                      w.MACHINE_STATUS = 'OFF'
 
 async def main():
-    w = WashingMachine(serial='SN-001')
+    n = 2
+    W = [WashingMachine(serial=f'SN-00{i+1}') for i in range(n)]
     async with aiomqtt.Client("broker.emqx.io") as client:
-        await asyncio.gather(listen(w, client) , CoroWashingMachine(w, client))
+        listenTask = []
+        CoroWashingMachineTask = []
+        for w in W:
+            listenTask.append(listen(w, client))
+            CoroWashingMachineTask.append(CoroWashingMachine(w, client))
+        await asyncio.gather(*listenTask, *CoroWashingMachineTask)
         
 
 # Change to the "Selector" event loop if platform is Windows
