@@ -23,6 +23,11 @@ class WashingMachine:
         self.Operation = 'CLOSE'
         self.SERIAL = serial
 
+async def waiter(w, event):
+    print(f"{time.ctime()} - [{w.SERIAL}-{w.MACHINE_STATUS}] Waiting to start... ")
+    await event.wait()
+    #print('... got it!')
+
 async def timefillwater(w, time_fill = 100):
     print(f"{time.ctime()} - [{w.SERIAL}-{w.MACHINE_STATUS}] - Another 10 seconds Timeout")
     await asyncio.sleep(time_fill)
@@ -56,14 +61,22 @@ async def publish_message(w, client, app, action, name, value):
 
 async def CoroWashingMachine(w, client):
     while True:
-        wait_next = round(10*random.random(),2)
-        await asyncio.sleep(wait_next)
+        #wait_next = round(10*random.random(),2)
+        #await asyncio.sleep(wait_next)
+        # Create an Event object.
+        w.event = asyncio.Event()
+
+        # Spawn a Task to wait until 'event' is set.
+        waiter_task = asyncio.create_task(waiter(w, w.event))
+
+        # Wait until the waiter task is finished.
+        await waiter_task
         if w.MACHINE_STATUS == 'OFF':
-            print(f"{time.ctime()} - [{w.SERIAL}-{w.MACHINE_STATUS}] Waiting to start... {wait_next} seconds.")
+            #print(f"{time.ctime()} - [{w.SERIAL}-{w.MACHINE_STATUS}] Waiting to start... ")
             continue
         # When washing is in FAULT state, wait until get FAULTCLEARED
         if w.MACHINE_STATUS == 'FALUT':
-            print(f"{time.ctime()} - [{w.SERIAL}-{w.MACHINE_STATUS}] Waiting to ready... {wait_next} seconds.")
+            #print(f"{time.ctime()} - [{w.SERIAL}-{w.MACHINE_STATUS}] Waiting to ready...")
             continue
         # ready state set 
         if w.MACHINE_STATUS == 'READY':
@@ -179,12 +192,13 @@ async def listen(w, client):
                 # set washing machine status
                 print(f"{time.ctime()} - MQTT - [{m_decode['serial']}] : {m_decode['name']} => {m_decode['value']}")
                 if (m_decode['name']=="STATUS" and m_decode['value']=="READY"):
+                    # Sleep for 1 second and set the event.
+                    w.event.set()
                     w.MACHINE_STATUS = 'READY'
                 elif (m_decode['name']=="Operation" and m_decode['value']=="WATERFULLLEVEL"):
                     w.Operation = 'WATERFULLLEVEL'
                     if w.Task:
                         w.Task.cancel()
-                        asyncio.sleep
                 elif (m_decode['name']=="Operation" and m_decode['value']=="TEMPERATUREREACHED"):
                     w.Operation = 'TEMPERATUREREACHED'
                     if w.Task:
@@ -198,6 +212,7 @@ async def listen(w, client):
                     if w.Task:
                         w.Task.cancel()
                 if (m_decode['name']=="Operation" and m_decode['value']=="FAULT_CLEAR"):
+                     w.event.set()
                      w.MACHINE_STATUS = 'OFF'
 
 async def main():
