@@ -46,7 +46,6 @@ async def motor(w, time_fill = 100):
 
 async def publish_message(w, client, app, action, name, value):
     print(f"{time.ctime()} - [{w.SERIAL}] {name} : {value}")
-    await asyncio.sleep(2)
     payload = {
                 "action"    : "get",
                 "project"   : student_id,
@@ -104,7 +103,6 @@ async def CoroWashingMachine(w, client):
                 except asyncio.CancelledError:
                     print(f"{time.ctime()} - [{w.SERIAL}-{w.MACHINE_STATUS}] - Full level detected")
                     w.MACHINE_STATUS = 'HEATWATER'
-                    await asyncio.sleep(1)
 
                 if w.MACHINE_STATUS == 'HEATWATER':
                     #await publish_message(w, client, "app", "get", "Operation", "WATERFULLLEVEL")
@@ -123,7 +121,6 @@ async def CoroWashingMachine(w, client):
                     except asyncio.CancelledError:
                         print(f"{time.ctime()} - [{w.SERIAL}-{w.MACHINE_STATUS}] - Required Temperature reached")
                         w.MACHINE_STATUS = 'WASH'
-                        await asyncio.sleep(1)
 
                 if w.MACHINE_STATUS == 'WASH':
                     #await publish_message(w, client, "app", "get", "Operation", "TEMPERATUREREACHED")
@@ -138,7 +135,6 @@ async def CoroWashingMachine(w, client):
                     except TimeoutError:
                         print(f"{time.ctime()} - [{w.SERIAL}-{w.MACHINE_STATUS}] - Function Completed")
                         w.MACHINE_STATUS = 'RINSE'
-                        await asyncio.sleep(1)
 
                     except asyncio.CancelledError:
                         print(f"{time.ctime()} - [{w.SERIAL}-{w.MACHINE_STATUS}] - Out of balance")
@@ -157,7 +153,6 @@ async def CoroWashingMachine(w, client):
                     except TimeoutError:
                         print(f"{time.ctime()} - [{w.SERIAL}-{w.MACHINE_STATUS}] - Function Completed")
                         w.MACHINE_STATUS = 'SPIN'
-                        await asyncio.sleep(1)
 
                     except asyncio.CancelledError:
                         print(f"{time.ctime()} - [{w.SERIAL}-{w.MACHINE_STATUS}] - Motor failure")
@@ -177,7 +172,6 @@ async def CoroWashingMachine(w, client):
                     except TimeoutError:
                         print(f"{time.ctime()} - [{w.SERIAL}-{w.MACHINE_STATUS}] - Function Completed")
                         w.MACHINE_STATUS = 'OFF'
-                        await asyncio.sleep(1)
 
                     except asyncio.CancelledError:
                         print(f"{time.ctime()} - [{w.SERIAL}-{w.MACHINE_STATUS}] - Motor failure")
@@ -196,21 +190,33 @@ async def listen(w, client):
                     w.event.set()
                     w.MACHINE_STATUS = 'READY'
                 elif (m_decode['name']=="Operation" and m_decode['value']=="WATERFULLLEVEL"):
-                    w.Operation = 'WATERFULLLEVEL'
-                    if w.Task:
-                        w.Task.cancel()
+                    if w.MACHINE_STATUS == "FILLWATER":
+                        w.Operation = 'WATERFULLLEVEL'
+                        if w.Task:
+                            w.Task.cancel()
+                    else :
+                        print(f"{time.ctime()} - [{w.SERIAL}-{w.MACHINE_STATUS}] - Enter error")
                 elif (m_decode['name']=="Operation" and m_decode['value']=="TEMPERATUREREACHED"):
-                    w.Operation = 'TEMPERATUREREACHED'
-                    if w.Task:
-                        w.Task.cancel()
+                    if w.MACHINE_STATUS == "HEATWATER":
+                        w.Operation = 'TEMPERATUREREACHED'
+                        if w.Task:
+                            w.Task.cancel()
+                    else :
+                        print(f"{time.ctime()} - [{w.SERIAL}-{w.MACHINE_STATUS}] - Enter error")
                 elif (m_decode['name']=="Operation" and m_decode['value']=="OUTOFBALANCE"):
-                    w.Operation = 'OUTOFBALANCE'
-                    if w.Task:
-                        w.Task.cancel()
+                    if w.MACHINE_STATUS == "WASH":
+                        w.Operation = 'OUTOFBALANCE'
+                        if w.Task:
+                            w.Task.cancel()
+                    else :
+                        print(f"{time.ctime()} - [{w.SERIAL}-{w.MACHINE_STATUS}] - Enter error")
                 elif (m_decode['name']=="Operation" and m_decode['value']=="MOTORFAILURE"):
-                    w.Operation = 'MOTORFAILURE'
-                    if w.Task:
-                        w.Task.cancel()
+                    if w.MACHINE_STATUS == "RINSE" or w.MACHINE_STATUS == "SPIN":
+                        w.Operation = 'MOTORFAILURE'
+                        if w.Task:
+                            w.Task.cancel()
+                    else :
+                        print(f"{time.ctime()} - [{w.SERIAL}-{w.MACHINE_STATUS}] - Enter error")
                 if (m_decode['name']=="Operation" and m_decode['value']=="FAULT_CLEAR"):
                      w.event.set()
                      w.MACHINE_STATUS = 'OFF'
