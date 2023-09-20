@@ -60,6 +60,7 @@ async def CoroWashingMachine(w:WashingMachine, client):
         #await asyncio.sleep(wait_next)
 
         if w.MACHINE_STATUS == 'OFF':
+            await publish_message(w, client, "app", "get", "STATUS", "OFF")
             print(f"{time.ctime()} - [{w.SERIAL}-{w.MACHINE_STATUS}] Waiting to start... ")
             await w.event.wait()
             w.event.clear()
@@ -67,6 +68,7 @@ async def CoroWashingMachine(w:WashingMachine, client):
             continue
         # When washing is in FAULT state, wait until get FAULTCLEARED
         if w.MACHINE_STATUS == 'FALUT':
+            await publish_message(w, client, "app", "get", "STATUS", "FALUT")
             print(f"{time.ctime()} - [{w.SERIAL}-{w.MACHINE_STATUS}] Waiting to Clear falut... ")
             await w.event.wait()
             w.event.clear()
@@ -175,8 +177,13 @@ async def CoroWashingMachine(w:WashingMachine, client):
 async def listen(w:WashingMachine, client):
     async with client.messages() as messages:
         await client.subscribe(f"v1cdti/hw/set/{student_id}/model-01/{w.SERIAL}")
+        #print(f"{time.ctime()} - [{w.SERIAL}] SUB topic: v1cdti/hw/set/{student_id}/model-01/{w.SERIAL}")
+        await client.subscribe(f"v1cdti/hw/get/{student_id}/model-01/")
+        #print(f"{time.ctime()} - [{w.SERIAL}] SUB topic: v1cdti/app/get/{student_id}/model-01/")
         async for message in messages:
             m_decode = json.loads(message.payload)
+            if message.topic.matches(f"v1cdti/hw/get/{student_id}/model-01/"):
+                await publish_message(w, client, "app", "monitor", "STATUS", w.MACHINE_STATUS)
             if message.topic.matches(f"v1cdti/hw/set/{student_id}/model-01/{w.SERIAL}"):
                 # set washing machine status
                 print(f"{time.ctime()} - MQTT - [{m_decode['serial']}] : {m_decode['name']} => {m_decode['value']}")
@@ -220,7 +227,7 @@ async def listen(w:WashingMachine, client):
                     print(f"{time.ctime()} - [{w.SERIAL}-{w.MACHINE_STATUS}] - Serial error")
 
 async def main():
-    n = 10
+    n = 2
     W = [WashingMachine(serial=f'SN-00{i+1}') for i in range(n)]
     async with aiomqtt.Client("broker.emqx.io") as client:
         listenTask = []
